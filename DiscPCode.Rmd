@@ -1,0 +1,656 @@
+---
+title: "Discovery Project"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-08-06"
+---
+
+
+
+
+```{r}
+library(dplyr)
+library(doBy)
+library(tidyverse)
+library(HIEv)
+library(ggplot2)
+library(lubridate)
+library(ggrepel)
+library(ggpubr)
+
+
+setToken("4pLkuaQShoS48aJ9mxep")
+
+full <- downloadTOA5(filename = "FACE_P0037_RA_CANOPYGREENNESS-FULL_OPEN_L2.dat", tryoffline = TRUE, maxnfiles = 200,
+
+                     dateTimeMethod = "POSIXct")
+
+zoom <- downloadTOA5(filename = "FACE_P0037_RA_CANOPYGREENNESS-ZOOMED_OPEN_L2.dat", tryoffline = TRUE, maxnfiles = 200,
+
+                     dateTimeMethod = "POSIXct")
+```
+
+Organizing Data Between all the rings
+
+```{r}
+
+## Rings 2 and 3 Are Ambient
+## Rings 1 and 4 Are Elevated
+
+head(zoom)
+head(full)
+ 
+## Separating the Data From all the Rings
+
+ring1Zoom <- subset(zoom, Ring == "1")
+ring1Full <- subset(full, Ring == "1")
+
+ring2Zoom <- subset(zoom, Ring == "2")
+ring2Full <- subset(full, Ring == "2")
+
+ring3Zoom <- subset(zoom, Ring == "3")
+ring3Full <- subset(full, Ring == "3")
+
+ring4Zoom <- subset(zoom, Ring == "4")
+ring4Full <- subset(full, Ring == "4")
+
+ head(ring1Full)
+head(ring1Zoom)
+ head(ring2Full)
+head(ring2Zoom)
+head(ring3Full)
+ head(ring3Zoom)
+ head(ring4Full)
+ head(ring4Zoom)
+
+ring1Zoom$RingID <- "Ring 1"
+ring2Zoom$RingID <- "Ring 2"
+
+# Combine the two datasets
+combined <- bind_rows(ring1Zoom, ring2Zoom)
+
+# Scatter plot
+ggplot(combined, aes(x = Date, y = GCC, color = RingID)) +
+  geom_point(alpha = 0.7, shape = 1, size = 2) +
+  labs(title = "GCC Comparison: Ring 1 vs Ring 2", x = "Date", y = "GCC") +
+  theme_minimal()
+
+
+
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Assuming your data frame is named 'zoom'
+
+# Create the Treatment group variable based on Ring being 1 or 4 (Elevated), else Ambient
+zoom <- zoom %>%
+  mutate(
+    Ring = as.character(Ring),  # Ensure Ring is character to compare easily
+    RingGroup = ifelse(Ring %in% c("1", "4"), "Elevated", "Ambient"),
+    DoY = as.integer(format(Date, "%j")),
+    Year = as.factor(format(Date, "%Y"))
+  )
+
+# 1. Peak Greenness Highlight - top 10% GCC per ring
+top_gcc <- zoom %>%
+  group_by(Ring) %>%
+  mutate(percentile = ntile(GCC, 10)) %>%
+  filter(percentile == 10)
+
+ggplot(zoom, aes(x = Date, y = GCC, group = Ring, color = RingGroup)) +
+  geom_point(alpha = 0.2) +
+  geom_point(data = top_gcc, aes(x = Date, y = GCC),
+             color = "gold", size = 2, alpha = 0.7) +
+  labs(title = "Highlighting Peak Greenness Periods in Rings",
+       x = "Date", y = "GCC") +
+  theme_minimal()
+
+# 2. GCC Distribution by Treatment Group - Violin + Boxplot
+ggplot(zoom, aes(x = RingGroup, y = GCC, fill = RingGroup)) +
+  geom_violin(trim = FALSE, alpha = 0.7) +
+  geom_boxplot(width = 0.13, fill = "white", outlier.shape = NA) +
+  labs(
+    title = "GCC Distribution by Treatment Group",
+    x = "Treatment",
+    y = "GCC"
+  ) +
+  scale_fill_manual(values = c("Ambient" = "gray", "Elevated" = "red")) +
+  theme_classic()
+
+# 3. Seasonal Cycle of GCC by Year and Treatment
+ggplot(zoom, aes(x = DoY, y = GCC, color = RingGroup)) +
+  geom_smooth(method = "loess", se = FALSE, span = 0.15) +
+  facet_wrap(~Year, ncol = 2) +
+  labs(
+    title = "Seasonal Cycle of GCC by Year and Treatment",
+    x = "Day of Year",
+    y = "GCC"
+  ) +
+  theme_minimal()
+```
+```{r}
+library(zoo)  # for rollmean
+
+# Prepare summary data with daily mean GCC per treatment group
+daily_gcc <- zoom %>%
+  group_by(Date, RingGroup) %>%
+  summarise(mean_GCC = mean(GCC, na.rm = TRUE)) %>%
+  arrange(Date)
+
+# Calculate rolling mean (7-day window) by treatment group
+daily_gcc <- daily_gcc %>%
+  group_by(RingGroup) %>%
+  mutate(rollmean_GCC = zoo::rollmean(mean_GCC, k = 7, fill = NA, align = "center"))
+
+# Plot rolling mean time series
+ggplot(daily_gcc, aes(x = Date, y = rollmean_GCC, color = RingGroup)) +
+  geom_line(size = 1) +
+  labs(
+    title = "7-Day Rolling Mean of Daily GCC by Treatment Group",
+    x = "Date",
+    y = "Rolling Mean GCC"
+  ) +
+  scale_color_manual(values = c("Ambient" = "gray", "Elevated" = "red")) +
+  theme_minimal()
+```
+
+
+Ring 1 has Elevated CO2 Levels 
+Ring 2 has Ambient CO2 Levels
+
+Phosphorus Was added in May and June of 2023
+
+Ring 3 and 4 
+```{r}
+
+ring3Zoom$RingID <- "Ring 3"
+ring4Zoom$RingID <- "Ring 4"
+
+# Combine the two datasets
+combined1 <- bind_rows(ring3Zoom, ring4Zoom)
+
+# Scatter plot
+ggplot(combined1, aes(x = Date, y = GCC, color = RingID)) +
+  geom_point(alpha = 0.7, shape = 1, size = 2) +
+  labs(title = "GCC Comparison: Ring 3 vs Ring 4", x = "Date", y = "GCC") +
+  theme_minimal()
+
+
+```
+
+Ring 1 and 4 
+```{r}
+
+ring1Zoom$RingID <- "Ring 1"
+ring4Zoom$RingID <- "Ring 4"
+
+# Combine the two datasets
+combined2 <- bind_rows(ring1Zoom, ring4Zoom)
+
+# Scatter plot
+ggplot(combined2, aes(x = Date, y = GCC, color = RingID)) +
+  geom_point(alpha = 0.7, shape = 1, size = 2) +
+  labs(title = "GCC Comparison: Ring 1 vs Ring 4", x = "Date", y = "GCC") +
+  theme_minimal()
+
+
+```
+
+
+Ambient VS Elevated
+```{r}
+
+ring1Zoom$Group <- "Elevated"
+ring4Zoom$Group <- "Elevated"
+ring2Zoom$Group <- "Ambient"
+ring3Zoom$Group <- "Ambient"
+
+combined_rings <- bind_rows(ring1Zoom, ring2Zoom, ring3Zoom, ring4Zoom)
+
+ggplot(combined_rings, aes(x = Date, y = GCC, color = Group)) +
+  geom_point(shape = 1, size = 2) +  # Hollow points
+  scale_color_manual(values = c("Elevated" = "red", "Ambient" = "black")) +
+  labs(title = "GCC Over Time: Elevated (Ring 1 and 4) vs Ambient (Ring 2 and 3)",
+       x = "Date", y = "GCC", color = "Group") +
+  theme_minimal()
+
+
+```
+
+```{r}
+cutoff_date <- as.POSIXct("2023-04-30 23:59:59")
+
+
+elevated <- bind_rows(ring1Zoom, ring4Zoom)
+
+ambient <- bind_rows(ring2Zoom, ring3Zoom)
+
+prephos_ambient <- ambient %>%
+  filter(Date <= cutoff_date)
+
+prephos_elevated <- elevated %>%
+  filter(Date <= cutoff_date)
+
+postphos_ambient <- ambient  %>%
+  filter(Date > cutoff_date)
+
+postphos_elevated <- elevated %>%
+  filter(Date > cutoff_date)
+
+postphos <- combined_rings %>%
+  filter(Date > cutoff_date)
+
+prephos <- combined_rings %>%
+  filter(Date <= cutoff_date)
+
+
+ggplot(prephos, aes(x = Date, y = GCC, color = Group)) +
+  geom_point(shape = 1, size = 2) +  # Hollow points
+  scale_color_manual(values = c("Elevated" = "red", "Ambient" = "black")) +
+  labs(title = "GCC Over Time: Elevated (Ring 1 and 4) vs Ambient (Ring 2 and 3)",
+       x = "Date", y = "GCC", color = "Group") +
+  theme_minimal()
+
+ggplot(postphos, aes(x = Date, y = GCC, color = Group)) +
+  geom_point(shape = 1, size = 2) +  # Hollow points
+  scale_color_manual(values = c("Elevated" = "red", "Ambient" = "black")) +
+  labs(title = "GCC Over Time: Elevated (Ring 1 and 4) vs Ambient (Ring 2 and 3)",
+       x = "Date", y = "GCC", color = "Group") +
+  theme_minimal()
+
+
+
+```
+
+Means
+
+```{r}
+
+maxgcc_elevated<- max(elevated$GCC)
+maxgcc_ambient<- max(ambient$GCC)
+
+mingcc_elevated<- min(elevated$GCC)
+mingcc_ambient<- min(ambient$GCC)
+
+cat("Maximum Elevated GCC :", maxgcc_elevated, "\n")
+cat("Maximun Ambient GCC :", maxgcc_ambient, "\n")
+
+cat("Minimum Elevated GCC :", mingcc_elevated, "\n")
+cat("Minimum Ambient GCC :", mingcc_ambient, "\n")
+
+mean_elevated <- mean(elevated$GCC)
+
+cat("mean of elevated rings' GCC :", mean_elevated, "\n")
+mean_ambient <- mean(ambient$GCC)
+
+cat("mean of ambient rings' GCC:", mean_ambient, "\n")
+
+mean_prephos_elevated <- mean(prephos_elevated$GCC)
+
+cat("mean of Elevated Rings' GCC Before Phosphorus:", mean_prephos_elevated, "\n")
+
+mean_prephos_ambient <- mean(prephos_ambient$GCC)
+
+cat("mean of Ambient Rings' GCC Before Phosphorus:", mean_prephos_ambient, "\n")
+
+mean_postphos_elevated <- mean(postphos_elevated$GCC)
+
+cat("mean of Elevated Rings' GCC After Phosphorus:",mean_postphos_elevated, "\n")
+
+mean_postphos_ambient <- mean(postphos_ambient$GCC)
+
+cat("mean of Ambient Rings' GCC After Phosphorus:", mean_postphos_ambient, "\n")
+
+```
+Filtering Data By year
+
+```{r}
+
+## Filtering Zoomed Photos
+
+# Extract Year
+zoom2 <- zoom %>%
+  mutate(Year = year(Date),
+         RingType = paste0("ring", Ring, "Zoom"))  # Label for naming
+
+# Get unique combos of RingType and Year
+combos <- unique(zoom2[, c("RingType", "Year")])
+
+# Loop over each combo
+for (i in 1:nrow(combos)) {
+  ring_label <- combos$RingType[i]
+  year_num <- combos$Year[i]
+  
+  # Subset data
+  subset_data <- zoom2 %>%
+    filter(RingType == ring_label, Year == year_num)
+  
+  # Create variable name e.g. ring1Zoom_2014
+  var_name <- paste0(ring_label, "_", year_num)
+  
+  # Assign into global environment
+  assign(var_name, subset_data, envir = .GlobalEnv)
+}
+
+
+## Filtering Full Photos 
+
+# Extract Year 
+full2 <- full %>%
+  mutate(Year = year(Date),
+         RingType = paste0("ring", Ring, "Full"))
+
+# Get unique combos of RingType and Year
+combos_full <- unique(full2[, c("RingType", "Year")])
+
+# Loop over each combo
+for (i in 1:nrow(combos_full)) {
+  ring_label <- combos_full$RingType[i]
+  year_num <- combos_full$Year[i]
+  
+  # Subset data
+  subset_data <- full2 %>%
+    filter(RingType == ring_label, Year == year_num)
+  
+  # Create variable name e.g. ring2Full_2019
+  var_name <- paste0(ring_label, "_", year_num)
+  
+  # Assign into global environment
+  assign(var_name, subset_data, envir = .GlobalEnv)
+}
+
+```
+
+
+Highest Peak Per Year
+
+```{r}
+find_max_gcc_dates <- function(base_name, start_year = 2014, end_year = 2025, tz = "AEST") {
+  results <- data.frame(
+    RingYear = character(),
+    Year = integer(),
+    Max_GCC = numeric(),
+    DateTime = as.POSIXct(character())
+  )
+  
+  for (yr in start_year:end_year) {
+    df_name <- paste0(base_name, "_", yr)
+    if (exists(df_name, envir = .GlobalEnv)) {
+      df <- get(df_name, envir = .GlobalEnv)
+      if (nrow(df) > 0 && !all(is.na(df$GCC))) {
+        max_idx <- which.max(df$GCC)
+        max_val <- df$GCC[max_idx]
+        max_dt <- as.POSIXct(df$DateTime[max_idx], origin = "1970-01-01", tz = tz)
+        
+        # Store in results data frame
+        results <- rbind(results, data.frame(
+          RingYear = df_name,
+          Year = yr,
+          Max_GCC = max_val,
+          DateTime = max_dt
+        ))
+      }
+    }
+  }
+  
+  return(results)
+}
+
+max_gcc_ringZoom1 <- find_max_gcc_dates("ringZoom1", tz = "Australia/Sydney")
+
+
+max_gcc_ringZoom2 <- find_max_gcc_dates("ringZoom2", tz = "Australia/Sydney")
+
+
+
+max_gcc_ringZoom3 <- find_max_gcc_dates("ringZoom3", tz = "Australia/Sydney")
+
+
+
+max_gcc_ringZoom4 <- find_max_gcc_dates("ringZoom4", tz = "Australia/Sydney")
+
+
+```
+
+Plotting Highest Peaks Per Year
+
+
+
+
+```{r r build-zoom-max, message=FALSE, warning=FALSE}
+library(dplyr); library(lubridate)
+
+# If you are using the function-based route:
+bases <- paste0("ringZoom", 1:4)
+
+zoom_max_all <- dplyr::bind_rows(lapply(bases, function(b) {
+  out <- find_max_gcc_dates(b, tz = "Australia/Sydney")
+  out$Ring <- sub("_\\d+$", "", out$RingYear)  # "ringZoom1"
+  out
+}))
+
+# --- sanity checks (print a few rows so you can see it's not empty) ---
+print(dim(zoom_max_all))     # should be > 0 rows
+print(head(zoom_max_all))
+
+# make sure types are right
+zoom_max_all$Year <- as.integer(zoom_max_all$Year)
+if (is.numeric(zoom_max_all$DateTime)) {
+  zoom_max_all$DateTime <- as.POSIXct(zoom_max_all$DateTime, origin="1970-01-01", tz="Australia/Sydney")}
+
+
+```
+
+```{r plot-zoom-max, dependson="build-zoom-max", fig.width=8, fig.height=5, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(ggrepel)
+
+##stopifnot(nrow(zoom_max_all) > 0)
+
+ggplot(zoom_max_all, aes(x = Year, y = Max_GCC, color = Ring, group = Ring)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  geom_text_repel(
+    aes(label = ifelse(is.na(DateTime), "", format(DateTime, "%Y-%m-%d"))),
+    size = 3, show.legend = FALSE, max.overlaps = 20
+  ) +
+  scale_color_manual(
+    values = c(
+      "ringZoom1" = "#E41A1C",
+      "ringZoom2" = "#4DAF4A",
+      "ringZoom3" = "#377EB8",
+      "ringZoom4" = "#984EA3"
+    ),
+    labels = c("Ring 1", "Ring 2", "Ring 3", "Ring 4")
+  ) +
+  labs(
+    title = "Max GCC per Year - Zoomed Rings",
+    x = "Year", y = "Max GCC", color = "Ring"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "bottom"
+  )
+
+
+
+```
+Peaks Per Ring
+```{r}
+peak_dates_ring <- combined_rings %>%
+  mutate(Year = year(Date)) %>%
+  group_by(Ring, Year) %>%
+  mutate(thresh = 0.98 * max(GCC, na.rm = TRUE)) %>%   # define "peak season"
+  filter(GCC >= thresh) %>%                            # keep only peak-season rows
+  summarise(
+    Start_Date = min(Date),
+    End_Date   = max(Date),
+    .groups = "drop"
+  ) %>%
+  arrange(Ring, Year)
+
+peak_dates_ring
+```
+```{r}
+##stopifnot(all(c("Ring","Year","Start_Date","End_Date") %in% names(peak_dates_ring)))
+
+# subtitle describing your threshold rule — edit if needed
+thresh_label <- "Peak window = \u2265 98% of yearly max GCC"
+
+# Helper: convert any Date to the same dummy year (keeps month/day)
+to_dummy_year <- function(x, year = 2000L) {
+  make_date(year = year, month = month(x), day = day(x))
+}
+
+# Prepare data for plotting on a Jan→Dec axis
+plot_df <- peak_dates_ring %>%
+  mutate(
+    Ring      = factor(Ring, levels = sort(unique(Ring))),
+    RingLab   = paste("Ring", Ring),
+    Year      = factor(Year),
+    Duration  = as.integer(End_Date - Start_Date) + 1L,
+    # map to dummy year for clean month axis
+    Start_plot = to_dummy_year(Start_Date, 2000L),
+    End_plot   = to_dummy_year(End_Date,   2000L),
+    Mid_plot   = Start_plot + (End_plot - Start_plot)/2
+  )
+
+# Axis limits/ticks for the dummy year
+x_min <- as.Date("2000-01-01")
+x_max <- as.Date("2000-12-31")
+
+ggplot(plot_df, aes(y = Year)) +
+  # thick bar from start -> end (within dummy year)
+  geom_segment(aes(x = Start_plot, xend = End_plot, yend = Year, colour = RingLab),
+               linewidth = 5, lineend = "round", alpha = 0.9) +
+  # end caps
+  geom_point(aes(x = Start_plot, colour = RingLab), size = 1.7) +
+  geom_point(aes(x = End_plot,   colour = RingLab), size = 1.7) +
+  # duration label centered
+  geom_text(aes(x = Mid_plot, label = paste0(Duration, " d")),
+            vjust = -0.9, size = 3.2, colour = "grey20") +
+  facet_wrap(~ RingLab, ncol = 2, scales = "free_y") +
+  # clean month axis (dummy year)
+  scale_x_date(limits = c(x_min, x_max),
+               breaks = seq(x_min, x_max, by = "1 month"),
+               date_labels = "%b",              # Jan, Feb, ...
+               expand = expansion(mult = c(0.01, 0.01))) +
+  scale_colour_brewer(palette = "Set2", guide = "none") +
+  labs(
+    title    = "Peak Window Duration by Year and Ring",
+    subtitle = thresh_label,
+    x        = "Date within Year",
+    y        = "Year"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 14),
+    axis.text.x        = element_text(vjust = 1),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor   = element_blank()
+  )
+```
+
+
+```{r}
+threshold_prop <- 0.98  # e.g., top 2% of GCC within each Ring×Season
+
+# Helper: season label and season-start date (June 1)
+season_label <- function(d) if_else(month(d) >= 6,
+                                    paste0(year(d), "-", year(d)+1),
+                                    paste0(year(d)-1, "-", year(d)))
+season_start <- function(d) make_date(if_else(month(d) >= 6, year(d), year(d)-1), 6, 1)
+
+# Prepare data
+cr_season <- combined_rings %>%
+  mutate(
+    Season      = season_label(Date),           # "2020-2021" etc.
+    SeasonStart = season_start(Date)            # Date of that season's June 1
+  )
+
+# Peak window per Ring×Season (thresholded on raw points)
+peak_windows_season <- cr_season %>%
+  group_by(Ring, Season) %>%
+  mutate(thresh = threshold_prop * max(GCC, na.rm = TRUE)) %>%
+  filter(GCC >= thresh) %>%
+  summarise(
+    Start_Date  = min(Date),
+    End_Date    = max(Date),
+    Peak_Thresh = first(thresh),
+    .groups     = "drop"
+  ) %>%
+  arrange(Ring, Season)
+
+# Optional: duration in days
+peak_windows_season <- peak_windows_season %>%
+  mutate(Duration = as.integer(End_Date - Start_Date) + 1L)
+
+peak_windows_season
+```
+
+
+```{r plot-season-gantt, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+
+##stopifnot(all(c("Ring","Season","Start_Date","End_Date","Duration") %in% names(peak_windows_season)))
+
+# Map any date to the same dummy season (keeps month/day relative to Jun 1)
+season_align <- function(x) {
+  # shift each date to dummy season anchored at 2000-06-01
+  anchor <- as.Date("2000-06-01")
+  # find real season start for x
+  ss <- make_date(if_else(month(x) >= 6, year(x), year(x)-1), 6, 1)
+  anchor + as.integer(x - ss)
+}
+
+plot_df <- peak_windows_season %>%
+  mutate(
+    RingLab   = paste("Ring", Ring),
+    Start_plot = season_align(Start_Date),
+    End_plot   = season_align(End_Date),
+    Mid_plot   = Start_plot + (End_plot - Start_plot)/2
+  )
+
+x_min <- as.Date("2000-06-01")
+x_max <- as.Date("2001-05-31")
+
+ggplot(plot_df, aes(y = Season)) +
+  geom_segment(aes(x = Start_plot, xend = End_plot, yend = Season, colour = RingLab),
+               linewidth = 5, lineend = "round", alpha = 0.9) +
+  geom_point(aes(x = Start_plot, colour = RingLab), size = 1.7) +
+  geom_point(aes(x = End_plot,   colour = RingLab), size = 1.7) +
+  geom_text(aes(x = Mid_plot, label = paste0(Duration, " d")),
+            vjust = -0.9, size = 3.2, colour = "grey20") +
+  facet_wrap(~ RingLab, ncol = 2, scales = "free_y") +
+  scale_x_date(limits = c(x_min, x_max),
+               breaks = seq(x_min, x_max, by = "1 month"),
+               date_labels = "%b",                     # Jun, Jul, …, May
+               expand = expansion(mult = c(0.01, 0.01))) +
+  scale_colour_brewer(palette = "Set2", guide = "none") +
+  labs(
+    title    = "Peak Window Duration by Season (Jun→May) and Ring",
+    subtitle = paste0("Peak window = \u2265 ", round(100*threshold_prop), "% of season max GCC"),
+    x        = "Within‑Season Month",
+    y        = "Season (YYYY–YYYY+1)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 14),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor   = element_blank()
+  )
+
+```
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
